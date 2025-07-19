@@ -1,0 +1,11 @@
+[package]
+name = "source-reader"
+version = "0.1.0"
+edition = "2024"
+license = "Unlicense"
+repository = "https://github.com/Yummiii/source-reader"
+authors = ["Yummi <yummi@zuraaa.com>"]
+description = "Very basic utility to read data from a file, url or stdin"
+
+[dependencies]
+ureq = "^3.0.12"
