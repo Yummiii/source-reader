@@ -1,7 +1,7 @@
 use std::{
     fs::File,
     io::{self, Error, Read, Result},
-    path::PathBuf,
+    path::{Path, PathBuf},
 };
 use ureq::Agent;
 
@@ -51,6 +51,13 @@ impl From<PathBuf> for SourceReader {
     }
 }
 
+/// Returns a `SourceReader::Local` for the path
+impl From<&Path> for SourceReader {
+    fn from(path: &Path) -> Self {
+        SourceReader::Local(path.to_path_buf())
+    }
+}
+
 impl SourceReader {
     fn default_agent() -> Agent {
         Agent::config_builder()
@@ -74,6 +81,7 @@ impl SourceReader {
     /// let mut buf = Vec::new();
     /// reader.read_to_end(&mut buf).unwrap();
     /// ```
+    #[cfg(not(doctest))]
     pub fn reader(&self, agent: Option<Agent>) -> Result<Box<dyn Read>> {
         match self {
             SourceReader::Local(path) => {
@@ -104,10 +112,68 @@ impl SourceReader {
     /// let mut buf = Vec::new();
     /// file.reader(None).unwrap().read_to_end(&mut buf).unwrap();
     /// ```
+    #[cfg(not(doctest))]
     pub fn read_to_end(&self, agent: Option<Agent>) -> Result<Vec<u8>> {
         let mut reader = self.reader(agent)?;
         let mut buf = Vec::new();
         reader.read_to_end(&mut buf)?;
         Ok(buf)
+    }
+
+    /// Returns the filename of the source, will return `None` for stdin
+    ///
+    /// # Examples
+    /// ```
+    /// use source_reader::SourceReader;
+    /// let file = SourceReader::from("/path/to/file.txt");
+    /// assert_eq!(file.filename(), Some("file.txt".to_string()));
+    /// ```
+    /// ```
+    /// use source_reader::SourceReader;
+    /// let file = SourceReader::from("https://example.com/file.txt");
+    /// assert_eq!(file.filename(), Some("file.txt".to_string()));
+    /// ```
+    /// ```
+    /// use source_reader::SourceReader;
+    /// let file = SourceReader::from("-");
+    /// assert_eq!(file.filename(), None);
+    /// ```
+    pub fn filename(&self) -> Option<String> {
+        match self {
+            SourceReader::Local(path) => {
+                path.file_name().and_then(|s| s.to_str()).map(String::from)
+            }
+            SourceReader::Remote(url) => url.split('/').next_back().map(String::from),
+            SourceReader::Stdin => None,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::SourceReader;
+    use std::io::Write;
+    use tempfile::NamedTempFile;
+
+    #[test]
+    fn read_from_path() {
+        let mut tmpfile = NamedTempFile::new().unwrap();
+        write!(tmpfile, "Hello!").unwrap();
+
+        let reader = SourceReader::from(tmpfile.path());
+        let data = reader.read_to_end(None).unwrap();
+
+        assert_eq!(data, b"Hello!");
+    }
+
+    #[test]
+    fn read_from_str_path() {
+        let mut tmpfile = NamedTempFile::new().unwrap();
+        write!(tmpfile, "Hello!").unwrap();
+
+        let reader = SourceReader::from(tmpfile.path().to_str().unwrap());
+        let data = reader.read_to_end(None).unwrap();
+
+        assert_eq!(data, b"Hello!");
     }
 }
